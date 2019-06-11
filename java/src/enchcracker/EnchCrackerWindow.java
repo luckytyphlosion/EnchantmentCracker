@@ -45,6 +45,8 @@ import javax.swing.border.LineBorder;
  */
 public class EnchCrackerWindow extends JFrame {
 
+    public static final Color INVALID_ENTRY_COLOR = new Color(1.0F, 0.3F, 0.0F);
+
 	private JPanel contentPane;
 	private JTextField bookshelvesTextField;
 	private JTextField slot1TextField;
@@ -60,8 +62,10 @@ public class EnchCrackerWindow extends JFrame {
 	private JTextField itemTextField;
 	private JLabel manipulateOutput;
 	private JTextField enchantmentTextField;
+	private JTextField levelTextField;
 
 	private int timesNeeded = -2;
+	private int chosenSlot = -1;
 
 	private DefaultListModel<Enchantments.EnchantmentInstance> wantedListModel;
 	private DefaultListModel<Enchantments.EnchantmentInstance> unwantedListModel;
@@ -553,11 +557,19 @@ public class EnchCrackerWindow extends JFrame {
 				"<html>Press to calculate how many items you <i>would</i> need to throw to get these enchantments</html>");
 		btnCalculate_1.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
-				long seed = playerSeed;
+			    int playerLevel = 0;
+			    boolean parseError = false;
+			    long seed = playerSeed;
 				String item = itemTextField.getText();
+				String playerLevelStr = levelTextField.getText();
+				
+
+				itemTextField.setBackground(Color.white);
+				levelTextField.setBackground(Color.white);
 
 				Log.info("Calculating items to throw");
 				Log.info("Item: " + item);
+				Log.info("Player Level: " + playerLevelStr);
 				Log.info("Wanted list:");
 				for (Enumeration<Enchantments.EnchantmentInstance> e = wantedListModel.elements(); e
 						.hasMoreElements();) {
@@ -569,8 +581,25 @@ public class EnchCrackerWindow extends JFrame {
 					Log.info("  " + e.nextElement());
 				}
 
+                try {
+                	if (playerLevelStr.toLowerCase().equals("infinite")
+                			|| playerLevelStr.toLowerCase().equals("infinity")) {
+                		playerLevel = 31;
+                	} else {
+                		playerLevel = Integer.parseInt(playerLevelStr);
+                	}
+                } catch (NumberFormatException e) {
+                    levelTextField.setBackground(INVALID_ENTRY_COLOR);
+                    parseError = true;
+                }
+
 				if (Items.getEnchantability(item) == 0) {
-					return;
+				    itemTextField.setBackground(INVALID_ENTRY_COLOR);
+				    parseError = true;
+				}
+
+				if (parseError) {
+				    return;
 				}
 
 				// -2: not found; -1: no dummy enchantment needed; >= 0: number of times needed
@@ -607,6 +636,13 @@ public class EnchCrackerWindow extends JFrame {
 							// Get enchantments (changes RNG seed)
 							List<Enchantments.EnchantmentInstance> enchantments = Enchantments
 									.getEnchantmentsInTable(rand, xpSeed, item, slot, enchantLevels[slot]);
+
+							// Do not consume an extra level when checking the level requirement if we are on the current exp seed
+							if (i == -1 && playerLevel < enchantLevels[slot]) {
+								continue slotLoop;
+							} else if (playerLevel < (enchantLevels[slot] + 1)) {
+								continue slotLoop;
+							}
 
 							// Does this list contain all the enchantments we want?
 							for (Enumeration<Enchantments.EnchantmentInstance> e = wantedListModel.elements(); e
@@ -649,6 +685,7 @@ public class EnchCrackerWindow extends JFrame {
 					manipulateOutput.setText("Throw " + timesNeeded + " (" + (timesNeeded / 64) + ":"
 							+ (timesNeeded % 64) + ") items; b: " + bookshelvesNeeded + ", s: " + (slot + 1));
 				}
+				chosenSlot = slot;
 			}
 		});
 		panel_11.add(btnCalculate_1);
@@ -660,11 +697,15 @@ public class EnchCrackerWindow extends JFrame {
 		btnDone.setToolTipText("Press to let the Cracker know that you have gone for these enchantments");
 		btnDone.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
+				String playerLevelStr = levelTextField.getText();
+
 				Log.info("Enchanted and applied changes");
-				if (timesNeeded == -2) {
+				
+				if (timesNeeded == -2 || chosenSlot == -1) {
 					// nothing happened, since it was impossible anyway
 					return;
 				}
+
 				if (timesNeeded != -1) {
 					// items thrown
 					for (int i = 0; i < timesNeeded; i++) {
@@ -678,6 +719,15 @@ public class EnchCrackerWindow extends JFrame {
 				// actual enchantment
 				playerSeed = (playerSeed * 0x5deece66dL + 0xb) & 0x0000_ffff_ffff_ffffL;
 
+				try {
+					int playerLevel = Integer.parseInt(playerLevelStr);
+					if (timesNeeded != -1) {
+						playerLevel--;
+					}
+					playerLevel -= (chosenSlot + 1);
+					levelTextField.setText(Integer.toString(playerLevel));
+				} catch (NumberFormatException e) {}
+
 				timesNeeded = -2;
 				manipulateOutput.setText("Not calculated");
 			}
@@ -687,14 +737,35 @@ public class EnchCrackerWindow extends JFrame {
 		JPanel panel_14 = new JPanel();
 		panel_10.add(panel_14);
 
+        JPanel panelLevelEnchantment = new JPanel();
+        panel_14.add(panelLevelEnchantment);
+        panelLevelEnchantment.setLayout(new BoxLayout(panelLevelEnchantment, BoxLayout.Y_AXIS));
+
+        JPanel panelLevel = new JPanel();
+
+        JLabel lblLevel = new JLabel("Level: ");
+        panelLevel.add(lblLevel);
+
+        levelTextField = new FixedTextField();
+        levelTextField.setBorder(new LineBorder(new Color(0, 0, 0)));
+        panelLevel.add(levelTextField);
+        levelTextField.setColumns(10);
+        levelTextField.setText("Infinity");
+
+        panelLevelEnchantment.add(panelLevel);
+
+        JPanel panelEnchantment = new JPanel();
+
 		JLabel lblEnchantment = new JLabel("Enchantment:");
 		lblEnchantment.setToolTipText("The enchantment ID (see the wiki) followed optionally by the level.");
-		panel_14.add(lblEnchantment);
+		panelEnchantment.add(lblEnchantment);
 
 		enchantmentTextField = new FixedTextField();
 		enchantmentTextField.setBorder(new LineBorder(new Color(0, 0, 0)));
-		panel_14.add(enchantmentTextField);
+		panelEnchantment.add(enchantmentTextField);
 		enchantmentTextField.setColumns(10);
+
+		panelLevelEnchantment.add(panelEnchantment);
 
 		Component horizontalStrut = Box.createHorizontalStrut(30);
 		panel_14.add(horizontalStrut);

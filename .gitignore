@@ -15,3 +15,8 @@ enchcracker.log
 *.iml
 MANIFEST.MF
 /out/
+/bin/
+.classpath
+.project
+*.dll
+*.log.*
